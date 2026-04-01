@@ -10,11 +10,18 @@ public class CorsConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        // Apply CORS config to all application endpoints (mapping paths are evaluated relative to the
-        // servlet context). Using "/**" ensures we cover endpoints under the application's context-path
-        // (e.g. with server.servlet.context-path=/api).
+        // CORS configuration - restricted for production
+        // In production, replace allowedOrigins with specific frontend domain(s)
+        // Example: .allowedOrigins("https://yourdomain.com", "https://www.yourdomain.com")
+        
         registry.addMapping("/**")
-                .allowedOriginPatterns("*") // Allow all origins (for development)
+                // Development: allows localhost. Production: restrict to specific domains
+                .allowedOrigins(
+                        "http://localhost:3000",
+                        "http://localhost:3001",
+                        "http://localhost:8080"
+                        // Add production frontend URL here in application-prod.properties
+                )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true)

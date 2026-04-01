@@ -39,10 +39,17 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // For local development: permit all requests (no authentication).
-                // WARNING: This disables security for the entire application. Do NOT use in production.
                 .authorizeHttpRequests(auth -> auth
-                        .anyRequest().permitAll()
+                        // Public endpoints - no authentication required
+                        .requestMatchers("/auth/**", "/products", "/products/**", "/products/search").permitAll()
+                        .requestMatchers("/payments/webhook").permitAll()  // Stripe webhook
+                        .requestMatchers("/").permitAll()  // Health check
+                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()  // CORS preflight
+                        // Admin-only endpoints
+                        .requestMatchers("/orders/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/products").hasRole("ADMIN")  // POST for create
+                        // All other endpoints require authentication
+                        .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

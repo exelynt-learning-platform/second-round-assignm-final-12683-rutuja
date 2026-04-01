@@ -10,6 +10,7 @@ import com.ecommerce.entity.Order;
 import com.ecommerce.entity.OrderItem;
 import com.ecommerce.entity.User;
 import com.ecommerce.exception.BadRequestException;
+import com.ecommerce.exception.InsufficientStockException;
 import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.repository.CartRepository;
 import com.ecommerce.repository.OrderRepository;
@@ -37,6 +38,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final CartRepository cartRepository;
+    private final com.ecommerce.repository.ProductRepository productRepository;
 
     @Override
     @Transactional
@@ -49,6 +51,17 @@ public class OrderServiceImpl implements OrderService {
 
         if (cart.getCartItems().isEmpty()) {
             throw new BadRequestException("Cannot create order from empty cart");
+        }
+
+        // CRITICAL: Validate product stock availability before creating order
+        for (CartItem cartItem : cart.getCartItems()) {
+            if (cartItem.getProduct().getStockQuantity() < cartItem.getQuantity()) {
+                throw new InsufficientStockException(
+                        cartItem.getProduct().getName(),
+                        cartItem.getQuantity(),
+                        cartItem.getProduct().getStockQuantity()
+                );
+            }
         }
 
         Order order = Order.builder()
@@ -75,6 +88,13 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order = orderRepository.save(order);
+        
+        // CRITICAL: Decrement product stock quantities after successful order creation
+        for (CartItem cartItem : cart.getCartItems()) {
+            com.ecommerce.entity.Product product = cartItem.getProduct();
+            product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
+            productRepository.save(product);
+        }
         
         // Clear cart after order creation
         cart.getCartItems().clear();
@@ -149,6 +169,14 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order.setOrderStatus(Order.OrderStatus.CANCELLED);
+        
+        // CRITICAL: Restore product stock quantities when order is cancelled
+        for (OrderItem item : order.getOrderItems()) {
+            com.ecommerce.entity.Product product = item.getProduct();
+            product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
+            productRepository.save(product);
+        }
+        
         order = orderRepository.save(order);
 
         log.info("Order cancelled: {}", orderId);

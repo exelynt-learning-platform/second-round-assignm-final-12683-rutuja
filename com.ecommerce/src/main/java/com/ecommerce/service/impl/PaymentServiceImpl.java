@@ -4,6 +4,7 @@ import com.ecommerce.dto.request.PaymentRequest;
 import com.ecommerce.dto.response.PaymentResponse;
 import com.ecommerce.entity.Order;
 import com.ecommerce.exception.BadRequestException;
+import com.ecommerce.exception.UnauthorizedException;
 import com.ecommerce.exception.PaymentException;
 import com.ecommerce.exception.ResourceNotFoundException;
 import com.ecommerce.repository.OrderRepository;
@@ -105,6 +106,11 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentResponse confirmPayment(Long userId, Long orderId, String paymentIntentId) {
         Order order = orderRepository.findByIdAndUserId(orderId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+
+        // CRITICAL: Validate that paymentIntentId belongs to this order (prevent payment hijacking)
+        if (order.getPaymentIntentId() != null && !order.getPaymentIntentId().equals(paymentIntentId)) {
+            throw new UnauthorizedException("Payment intent does not match this order. Potential payment hijacking attempt.");
+        }
 
         try {
             PaymentIntent paymentIntent = PaymentIntent.retrieve(paymentIntentId);
