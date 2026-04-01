@@ -129,7 +129,7 @@ public class ProductServiceImpl implements ProductService {
                 .build();
     }
 
-    public ProductResponse mapToResponse(Product product) {
+    private ProductResponse mapToResponse(Product product) {
         return ProductResponse.builder()
                 .id(product.getId())
                 .name(product.getName())
