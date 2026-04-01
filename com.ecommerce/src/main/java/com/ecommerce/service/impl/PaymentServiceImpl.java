@@ -110,20 +110,37 @@ public class PaymentServiceImpl implements PaymentService {
         Order order = orderRepository.findByIdAndUserId(orderId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
 
-        // CRITICAL: Validate that paymentIntentId belongs to this order (prevent payment hijacking)
+        // CRITICAL: Comprehensive payment validation to prevent fraud
+        // 1. Verify paymentIntentId matches order
         if (order.getPaymentIntentId() != null && !order.getPaymentIntentId().equals(paymentIntentId)) {
             throw new UnauthorizedException("Payment intent does not match this order. Potential payment hijacking attempt.");
+        }
+        
+        // 2. Ensure order is in valid state for payment
+        if (order.getOrderStatus() == Order.OrderStatus.CANCELLED) {
+            throw new BadRequestException("Cannot process payment for a cancelled order");
+        }
+        
+        // 3. Prevent duplicate payment processing
+        if (order.getPaymentStatus() == Order.PaymentStatus.PAID) {
+            throw new BadRequestException("This order has already been paid");
         }
 
         try {
             PaymentIntent paymentIntent = PaymentIntent.retrieve(paymentIntentId);
+
+            // 4. Additional validation: ensure payment metadata matches order
+            String metadataOrderId = paymentIntent.getMetadata().get("orderId");
+            if (metadataOrderId == null || !metadataOrderId.equals(orderId.toString())) {
+                throw new UnauthorizedException("Payment intent metadata does not match order. Potential fraud detected.");
+            }
 
             if ("succeeded".equals(paymentIntent.getStatus())) {
                 order.setPaymentStatus(Order.PaymentStatus.PAID);
                 order.setOrderStatus(Order.OrderStatus.CONFIRMED);
                 order.setPaymentIntentId(paymentIntentId);
                 orderRepository.save(order);
-                log.info("Payment confirmed for order: {}", order.getOrderNumber());
+                log.info("Payment confirmed for order: {} (user: {})", order.getOrderNumber(), userId);
             }
 
             return PaymentResponse.builder()
@@ -135,6 +152,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .build();
 
         } catch (StripeException e) {
+            log.error("Stripe exception during payment confirmation: {}", e.getMessage());
             throw new PaymentException("Failed to confirm payment: " + e.getMessage());
         }
     }
