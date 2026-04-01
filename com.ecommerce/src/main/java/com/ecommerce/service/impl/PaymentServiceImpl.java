@@ -36,6 +36,9 @@ public class PaymentServiceImpl implements PaymentService {
     @Value("${stripe.webhook.secret}")
     private String webhookSecret;
 
+    @Value("${stripe.currency:usd}")
+    private String currency;
+
     @Override
     @Transactional
     public PaymentResponse createPaymentIntent(Long userId, PaymentRequest request) {
@@ -57,7 +60,7 @@ public class PaymentServiceImpl implements PaymentService {
 
             PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
                     .setAmount(amountInCents)
-                    .setCurrency("usd")
+                    .setCurrency(currency)
                     .setPaymentMethod(request.getPaymentMethodId())
                     .setConfirm(true)
                     .setReturnUrl("https://your-app.com/payment/return")
