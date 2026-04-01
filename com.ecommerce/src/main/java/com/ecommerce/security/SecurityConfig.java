@@ -41,13 +41,16 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints - no authentication required
-                        .requestMatchers("/auth/**", "/products", "/products/**", "/products/search").permitAll()
+                        .requestMatchers("/auth/**", "/products/search").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/products", "/products/**").permitAll()
                         .requestMatchers("/payments/webhook").permitAll()  // Stripe webhook
                         .requestMatchers("/").permitAll()  // Health check
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()  // CORS preflight
-                        // Admin-only endpoints
+                        // Admin-only endpoints - explicit HTTP methods
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/products").hasRole("ADMIN")
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/products/**").hasRole("ADMIN")
+                        .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/products/**").hasRole("ADMIN")
                         .requestMatchers("/orders/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/products").hasRole("ADMIN")  // POST for create
                         // All other endpoints require authentication
                         .anyRequest().authenticated()
                 )

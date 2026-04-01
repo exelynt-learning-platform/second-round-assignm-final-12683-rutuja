@@ -40,6 +40,27 @@ public class OrderServiceImpl implements OrderService {
     private final CartRepository cartRepository;
     private final com.ecommerce.repository.ProductRepository productRepository;
 
+    /**
+     * Validates that all items in the cart have sufficient stock available.
+     * @param cart The shopping cart to validate
+     * @throws InsufficientStockException if any item has insufficient stock
+     */
+    private void validateStockAvailability(Cart cart) {
+        for (CartItem cartItem : cart.getCartItems()) {
+            com.ecommerce.entity.Product product = cartItem.getProduct();
+            if (product == null) {
+                throw new BadRequestException("Cart contains invalid product reference");
+            }
+            if (product.getStockQuantity() < cartItem.getQuantity()) {
+                throw new InsufficientStockException(
+                        product.getName(),
+                        cartItem.getQuantity(),
+                        product.getStockQuantity()
+                );
+            }
+        }
+    }
+
     @Override
     @Transactional
     public OrderResponse createOrder(Long userId, OrderRequest request) {
@@ -53,16 +74,8 @@ public class OrderServiceImpl implements OrderService {
             throw new BadRequestException("Cannot create order from empty cart");
         }
 
-        // CRITICAL: Validate product stock availability before creating order
-        for (CartItem cartItem : cart.getCartItems()) {
-            if (cartItem.getProduct().getStockQuantity() < cartItem.getQuantity()) {
-                throw new InsufficientStockException(
-                        cartItem.getProduct().getName(),
-                        cartItem.getQuantity(),
-                        cartItem.getProduct().getStockQuantity()
-                );
-            }
-        }
+        // Validate stock availability before order processing
+        validateStockAvailability(cart);
 
         Order order = Order.builder()
                 .orderNumber("ORD-" + UUID.randomUUID().toString().substring(0, 12).toUpperCase())
@@ -89,11 +102,13 @@ public class OrderServiceImpl implements OrderService {
 
         order = orderRepository.save(order);
         
-        // CRITICAL: Decrement product stock quantities after successful order creation
+        // Decrement product stock and clear cart in single pass
         for (CartItem cartItem : cart.getCartItems()) {
             com.ecommerce.entity.Product product = cartItem.getProduct();
-            product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
-            productRepository.save(product);
+            if (product != null) {  // Null safety check
+                product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
+                productRepository.save(product);
+            }
         }
         
         // Clear cart after order creation
