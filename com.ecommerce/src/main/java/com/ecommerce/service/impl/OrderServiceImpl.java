@@ -102,12 +102,11 @@ public class OrderServiceImpl implements OrderService {
 
         order = orderRepository.save(order);
         
-        // Decrement product stock and clear cart in single pass
+        // OPTIMIZED: Use batch update instead of individual saves (prevents N+1 query problem)
         for (CartItem cartItem : cart.getCartItems()) {
             com.ecommerce.entity.Product product = cartItem.getProduct();
             if (product != null) {  // Null safety check
-                product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
-                productRepository.save(product);
+                productRepository.decrementStock(product.getId(), cartItem.getQuantity());
             }
         }
         
@@ -185,11 +184,12 @@ public class OrderServiceImpl implements OrderService {
 
         order.setOrderStatus(Order.OrderStatus.CANCELLED);
         
-        // CRITICAL: Restore product stock quantities when order is cancelled
+        // OPTIMIZED: Use batch update to restore stock (prevents N+1 query problem)
         for (OrderItem item : order.getOrderItems()) {
             com.ecommerce.entity.Product product = item.getProduct();
-            product.setStockQuantity(product.getStockQuantity() + item.getQuantity());
-            productRepository.save(product);
+            if (product != null) {
+                productRepository.incrementStock(product.getId(), item.getQuantity());
+            }
         }
         
         order = orderRepository.save(order);

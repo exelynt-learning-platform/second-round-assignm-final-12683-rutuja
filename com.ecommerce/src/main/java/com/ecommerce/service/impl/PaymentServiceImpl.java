@@ -39,6 +39,9 @@ public class PaymentServiceImpl implements PaymentService {
     @Value("${stripe.currency:usd}")
     private String currency;
 
+    @Value("${stripe.payment.return-url:https://localhost:3000/payment/return}")
+    private String paymentReturnUrl;
+
     @Override
     @Transactional
     public PaymentResponse createPaymentIntent(Long userId, PaymentRequest request) {
@@ -63,7 +66,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .setCurrency(currency)
                     .setPaymentMethod(request.getPaymentMethodId())
                     .setConfirm(true)
-                    .setReturnUrl("https://your-app.com/payment/return")
+                    .setReturnUrl(paymentReturnUrl)
                     .putMetadata("orderId", order.getId().toString())
                     .putMetadata("orderNumber", order.getOrderNumber())
                     .putMetadata("userId", userId.toString())
